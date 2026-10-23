@@ -325,5 +325,6 @@ export default {
     if(request.method==='GET'&&url.pathname.startsWith('/sub/'))return handleSub(url,env);
     return env.ASSETS.fetch(request);
   },
+  
 };
 
