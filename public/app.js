@@ -34,6 +34,17 @@ fillDemoBtn.addEventListener('click', () => {
   document.getElementById('keepOriginalHost').checked = true;
 });
 
+async function fetchPreferredApiItems(apiUrl) {
+  const response = await fetch('/api/fetch-preferred', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url: apiUrl }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(data.error || '获取优选 IP 失败');
+  return Array.isArray(data.items) ? data.items : [];
+}
+
 fetchPreferredApiBtn.addEventListener('click', async () => {
   const apiUrl = preferredApiUrl.value.trim();
   if (!apiUrl) {
@@ -51,21 +62,12 @@ fetchPreferredApiBtn.addEventListener('click', async () => {
   setApiStatus('正在请求优选 API...', false);
 
   try {
-    const response = await fetch('/api/fetch-preferred', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ url: apiUrl }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.ok) {
-      throw new Error(data.error || '获取优选 IP 失败');
-    }
-
+    const items = await fetchPreferredApiItems(apiUrl);
     const textarea = document.getElementById('preferredIps');
     const current = textarea.value.trim();
-    const incoming = Array.isArray(data.items) ? data.items.join('\n') : '';
+    const incoming = items.join('\n');
     textarea.value = current ? `${current}\n${incoming}` : incoming;
-    setApiStatus(`成功获取 ${data.items.length} 个优选地址，已追加到优选框。`, false);
+    setApiStatus(`成功获取 ${items.length} 个优选地址，已追加到优选框。`, false);
   } catch (error) {
     setApiStatus(error.message || '请求失败，请检查 API 地址。', true);
   } finally {
@@ -79,9 +81,40 @@ form.addEventListener('submit', async (event) => {
   warningBox.classList.add('hidden');
   previewBody.innerHTML = '';
 
+  let preferredIps = document.getElementById('preferredIps').value;
+  const apiUrl = preferredApiUrl.value.trim();
+
+  // 填了 API 就在“生成订阅”时自动请求，并把返回地址直接写入本次订阅。
+  // 用户不需要再先点击“获取优选 IP”。
+  if (apiUrl) {
+    if (!/^https?:\/\//i.test(apiUrl)) {
+      warningBox.textContent = '优选 API 地址必须以 http:// 或 https:// 开头。';
+      warningBox.classList.remove('hidden');
+      preferredApiUrl.focus();
+      return;
+    }
+    submitBtn.disabled = true;
+    submitBtn.textContent = '获取优选 API...';
+    setApiStatus('生成订阅前正在自动获取优选地址...', false);
+    try {
+      const items = await fetchPreferredApiItems(apiUrl);
+      const currentLines = preferredIps.trim();
+      const incoming = items.join('\n');
+      preferredIps = currentLines ? `${currentLines}\n${incoming}` : incoming;
+      document.getElementById('preferredIps').value = preferredIps;
+      setApiStatus(`API 已自动加入本次订阅：${items.length} 个优选地址。`, false);
+    } catch (error) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '生成订阅';
+      warningBox.textContent = error.message || '优选 API 请求失败';
+      warningBox.classList.remove('hidden');
+      return;
+    }
+  }
+
   const payload = {
     nodeLinks: document.getElementById('nodeLinks').value,
-    preferredIps: document.getElementById('preferredIps').value,
+    preferredIps,
     namePrefix: document.getElementById('namePrefix').value,
     keepOriginalHost: document.getElementById('keepOriginalHost').checked,
   };
