@@ -8,3 +8,5 @@ directory = "./public"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 run_worker_first = ["/api/*", "/sub/*"]
+
+# Cloudflare Workers Builds: production Worker yxip-dyq
